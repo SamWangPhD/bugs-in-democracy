@@ -123,7 +123,7 @@ def get_null_gamma(filename, randomness):
     csv = os.path.join(directory, filename) 
     df = pd.read_csv(csv)  
     candidates = df['candidate'].values
-    election = pd.read_csv("election_table.csv")
+    election = pd.read_csv("election_table_after_2023_updated.csv")
     choices = min(len(candidates), round(election.loc[election['filename']==filename, 'choices'].values[0]))
     
     #print(choices)
