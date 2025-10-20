@@ -87,35 +87,56 @@ def get_slow_null_ballots(df):
 
 
 
-def generate_and_group_permutations(items, choices):
-    n = len(items)
-    grouped_permutations = defaultdict(list)
-    
-    for i in range(1, choices + 1):
-        for perm in permutations(items, i):
-            grouped_permutations[perm[0]].append(perm)
-    
-    return grouped_permutations
+def generate_and_group_permutations(items, choices, min_len=1):
+    """
+    Group all permutations of 'items' by their first element, for lengths in
+    [min_len, choices]. Example group key: the first candidate in the ballot.
+    """
+    items = list(items)
+    Lmin = max(1, int(min_len))
+    Lmax = min(len(items), int(choices))
+    grouped = defaultdict(list)
+
+    if Lmin > Lmax:
+        return grouped  # nothing to generate
+
+    for L in range(Lmin, Lmax + 1):
+        for perm in permutations(items, L):
+            grouped[perm[0]].append(perm)
+    return grouped
 
 
-def get_extreme_null_ballots(df, choices):
+def get_extreme_null_ballots(df, choices, rng=None):
+    """
+    Build a dict of ballots -> counts.
+    Uses only ballots with length > 2 (i.e., length >= 3).
+    """
+    if rng is None:
+        rng = random  # use global RNG unless one is passed in
 
-    candidates = df['candidate'].values
-    candidates = sorted(candidates)
+    candidates = sorted(df['candidate'].astype(str).values)
+
+    # Generate only length >= 3 ballots, grouped by first choice
+    grouped_perms = generate_and_group_permutations(candidates, choices, min_len=3)
+
     ballots = {}
-    #get choices from elections.csv
-    grouped_permutations = generate_and_group_permutations(candidates, choices)
-    sum_voters = df['first place count'].sum()
-    for candidate in candidates:
-        first_place_freq = df.loc[df['candidate']==candidate, 'first place freq'].values[0]
+    # If you actually want to use 'first place count' instead of freq, switch below.
+    for cand in candidates:
+        # how many first-place ballots to draw for this candidate
+        first_place_freq = float(df.loc[df['candidate'] == cand, 'first place freq'].values[0])
         first_place = int(round(first_place_freq, 3) * 1000)
-        random_ballots = random.choices(grouped_permutations[candidate], k=first_place)
-        for b in random_ballots:
-            if b not in ballots:
-                ballots[b] = 0
-            ballots[b] += 1
-    return ballots
 
+        # If there are no length>=3 permutations starting with this candidate, skip
+        pool = grouped_perms.get(cand, [])
+        if not pool or first_place <= 0:
+            continue
+
+        # sample permutations with replacement
+        sampled = rng.choices(pool, k=first_place)
+        for b in sampled:
+            ballots[b] = ballots.get(b, 0) + 1
+
+    return ballots
 
 def get_null_gamma(filename, randomness):
 
@@ -123,7 +144,7 @@ def get_null_gamma(filename, randomness):
     csv = os.path.join(directory, filename) 
     df = pd.read_csv(csv)  
     candidates = df['candidate'].values
-    election = pd.read_csv("election_table_after_2023_updated.csv")
+    election = pd.read_csv("election_table.csv")
     choices = min(len(candidates), round(election.loc[election['filename']==filename, 'choices'].values[0]))
     
     #print(choices)

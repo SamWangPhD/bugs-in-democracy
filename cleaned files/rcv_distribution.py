@@ -205,13 +205,61 @@ def plot_KDE(ballots, normalized_distances, filename=None, ignore=False, save=Fa
     for name in normalized_distances:
         normalized_names.append(name)
         normalized_points.append(normalized_distances[name])
-    plt.figure(figsize=(10, 6))
-    sns.kdeplot(distributed_points, fill=True)
-    plt.title('Kernel Density Estimation of Data')
-    plt.xticks(normalized_points, normalized_names, rotation=45)
-    plt.xlabel('Value')
-    plt.ylabel('Density')
-    plt.grid(True)
+
+    # ==================== PLOTTING (updated formatting only) ====================
+    fig, ax = plt.subplots(figsize=(3.35, 2.60), dpi=300)  # ~85mm x 66mm (single-column)
+
+    # clean axis look
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.tick_params(direction="out", length=4, width=0.9)
+    ax.minorticks_on()
+
+    # KDE: thin line + subtle fill for readability
+    try:
+        import seaborn as sns
+        sns.kdeplot(x=distributed_points, ax=ax, fill=True, alpha=0.18,
+                    linewidth=0.9, color="#1f77b4")
+    except Exception:
+        # Fallback if seaborn isn't available
+        from scipy.stats import gaussian_kde
+        if np.isfinite(distributed_points).sum() > 1:
+            kde = gaussian_kde(distributed_points[np.isfinite(distributed_points)])
+            grid = np.linspace(np.nanmin(distributed_points), np.nanmax(distributed_points), 512)
+            ax.plot(grid, kde(grid), lw=0.9, color="#1f77b4")
+
+    # format names → "F. Last" (or just "Last" if single token)
+    def _fmt_name(s):
+        s = str(s).strip()
+        if not s:
+            return ""
+        parts = [p for p in s.replace(",", " ").split() if p]
+        if len(parts) == 1:
+            return parts[0].title()
+        return f"{parts[0][0].upper()}. {parts[-1].title()}"
+
+    labels = [_fmt_name(n) for n in normalized_names]
+
+    # auto-thin labels to avoid crowding (target ~≤14 visible)
+    N = len(labels)
+    if N > 14:
+        step = int(np.ceil(N / 14))
+        shown = set(range(0, N, step))
+        labels_draw = [labels[i] if i in shown else "" for i in range(N)]
+    else:
+        labels_draw = labels
+
+    # axis labels, ticks, grid
+    ax.set_xlabel("Candidates")
+    ax.set_ylabel("Density")
+    ax.set_xticks(normalized_points)
+    ax.set_xticklabels(labels_draw, rotation=45, ha="right", fontsize=7)  # smaller labels
+    ax.yaxis.grid(True, linestyle=":", linewidth=0.7, alpha=0.55)
+    ax.margins(x=0.02)
+
+    fig.tight_layout()
+    # ============================================================================
+
     if save == False:
         plt.show()
     else:
